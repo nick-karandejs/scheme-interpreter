@@ -1,6 +1,7 @@
 module Parser
-    ( parseExpr
-    , schemeParse
+    ( LispVal(..)
+    , parseExpr
+    , readExpr
     ) where
 
 import Control.Monad
@@ -13,7 +14,17 @@ data LispVal = Atom String
              | Number Integer
              | String String
              | Bool Bool
-             deriving Show
+
+
+instance Show LispVal where
+    show (String contents) = "\"" ++ contents ++ "\""
+    show (Atom name) = name
+    show (Number contents) = show contents
+    show (Bool True) = "#t"
+    show (Bool False) = "#f"
+    show (List contents) = "(" ++ (unwords . map show) contents ++ ")"
+    show (DottedList head tail) =
+        "(" ++ (unwords . map show) head ++ " . " ++ show tail ++ ")"
 
 type ParserVal = Parser LispVal
 
@@ -81,16 +92,11 @@ parseExpr =
            char ')'
            return x
 
-readExpr :: String -> String
+readExpr :: String -> LispVal
 -- `>>` is a bind operator; behaves differently for each Monad
 -- Here is will try to match spaces and then try matching the rest with symbols
 -- readExpr input = case parse (spaces >> symbol) "lisp" input of
 readExpr input =
     case parse parseExpr "lisp" input of
-        Left err -> "No match " ++ show err
-        Right val -> "Value matched " ++ (show val)
-
-schemeParse :: IO ()
-schemeParse = do
-    (expr:_) <- getArgs
-    putStrLn $ readExpr expr
+        Left err -> String $ "No match " ++ show err
+        Right val -> val
