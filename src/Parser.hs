@@ -1,36 +1,22 @@
 module Parser
-    ( LispVal(..)
-    , parseExpr
-    , readExpr
+    (parseExpr
+   , readExpr
     ) where
 
 import Control.Monad
+import Control.Monad.Except
 import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Common
 
-data LispVal = Atom String
-             | List [LispVal]
-             | DottedList [LispVal] LispVal
-             | Number Integer
-             | String String
-             | Bool Bool
-
-
-instance Show LispVal where
-    show (String contents) = "\"" ++ contents ++ "\""
-    show (Atom name) = name
-    show (Number contents) = show contents
-    show (Bool True) = "#t"
-    show (Bool False) = "#f"
-    show (List contents) = "(" ++ (unwords . map show) contents ++ ")"
-    show (DottedList head tail) =
-        "(" ++ (unwords . map show) head ++ " . " ++ show tail ++ ")"
 
 type ParserVal = Parser LispVal
+
 
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 
+escQuote :: Parser Char
 escQuote = do
     char '\\'
     char '"'
@@ -43,7 +29,6 @@ parseString :: ParserVal
 parseString = do
     -- absorb the double quote
     char '"'
-    -- read upto the first double quote
     x <- many $ escQuote <|> (noneOf "\"")
     char '"'
     -- apply the Lisp constructor
@@ -65,18 +50,20 @@ parseNumber :: ParserVal
 parseNumber = liftM (Number . read) $ many1 digit
 
 parseList :: ParserVal
+-- Parses expressions separated by spaces (str, num, brackets, ...)
 parseList = liftM List $ sepBy parseExpr spaces
 
 parseDottedList :: ParserVal
 parseDottedList = do
+    -- Parse expressions that have space at the end
     head <- endBy parseExpr spaces
+    -- `>>` is a bind operator; is equivalent to multiple do statements
     tail <- char '.' >> spaces >> parseExpr
     return $ DottedList head tail
 
 parseQuoted :: ParserVal
 parseQuoted = do
-    char '\''
-    x <- parseExpr
+    x <- char '\'' >> parseExpr
     return $ List [Atom "quote", x]
 
 
@@ -92,11 +79,8 @@ parseExpr =
            char ')'
            return x
 
-readExpr :: String -> LispVal
--- `>>` is a bind operator; behaves differently for each Monad
--- Here is will try to match spaces and then try matching the rest with symbols
--- readExpr input = case parse (spaces >> symbol) "lisp" input of
+readExpr :: String -> ThrowsError LispVal
 readExpr input =
     case parse parseExpr "lisp" input of
-        Left err -> String $ "No match " ++ show err
-        Right val -> val
+        Left err -> throwError $ Parser err
+        Right val -> return val

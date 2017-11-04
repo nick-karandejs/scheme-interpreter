@@ -3,13 +3,13 @@ module Main where
 import System.Environment
 import Parser (readExpr)
 import Evaluator (eval)
+import Common (extractValue, trapError)
+import Control.Monad
 
-
-{- schemeParse :: IO () -}
-{- schemeParse = do -}
-{-     (expr:_) <- getArgs -}
-{-     putStrLn $ readExpr expr -}
 
 main :: IO ()
-main = getArgs >>= print . eval . readExpr . head
+main = do
+    arg <- liftM head $ getArgs
+    result <- return $ liftM show $ readExpr arg >>= eval
+    putStrLn $ extractValue $ trapError result
 
