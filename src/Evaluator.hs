@@ -15,7 +15,8 @@ eval (List [Atom "quote", val]) = return val
 eval (List (Atom fun : args)) = mapM eval args >>= apply fun
 eval badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
-numericMonoid :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
+numericMonoid :: (Integer -> Integer -> Integer)
+                 -> [LispVal] -> ThrowsError LispVal
 numericMonoid _ [] = throwError $ NumArgs 2 []
 numericMonoid _ val@[_] = throwError $ NumArgs 2 val
 numericMonoid op params = mapM unpackNum params >>= return . Number . foldl1 op
@@ -23,14 +24,53 @@ numericMonoid op params = mapM unpackNum params >>= return . Number . foldl1 op
 unpackNum :: LispVal -> ThrowsError Integer
 unpackNum (Number n) = return n
 unpackNum val = throwError $ TypeMismatch "number" val
+
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String s) = return s
+unpackStr val = throwError $ TypeMismatch "string" val
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool val = throwError $ TypeMismatch "boolean" val
+
 -- TODO: add weak typing? i.e. to accept string as number as well
 
 -- TODO: add more primitives
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericMonoid (+)),
               ("-", numericMonoid (-)),
+              ("*", numericMonoid (*)),
+              ("/", numericMonoid div),
+              ("mod", numericMonoid mod),
+              ("quotient", numericMonoid quot),
+              ("remainder", numericMonoid rem),
               ("number?", typeTest isNum),
-              ("string?", typeTest isString)]
+              ("string?", typeTest isString),
+              ("=", numBoolMonoid (==)),
+              ("string=?", strBoolMonoid (==)),
+              ("&&", boolBoolMonoid (&&))]
+
+
+numBoolMonoid :: (Integer -> Integer -> Bool) -> [LispVal] -> ThrowsError LispVal
+numBoolMonoid = boolMonoid unpackNum
+
+strBoolMonoid :: (String -> String -> Bool) -> [LispVal] -> ThrowsError LispVal
+strBoolMonoid = boolMonoid unpackStr
+
+boolBoolMonoid :: (Bool -> Bool -> Bool) -> [LispVal] -> ThrowsError LispVal
+boolBoolMonoid = boolMonoid unpackBool
+
+boolMonoid :: (LispVal -> ThrowsError a) -> (a -> a -> Bool)
+              -> [LispVal] -> ThrowsError LispVal
+boolMonoid unpacker op args =
+    if length args /= 2
+    then throwError $ NumArgs 2 args
+    else do
+        arg0 <- unpacker $ args !! 0
+        arg1 <- unpacker $ args !! 1
+        return . Bool $ op arg0 arg1
+{- numBoolMonoid op [arg1, arg2] = return $ Bool $ op (unpackNum arg1) (unpackNum arg2) -}
+
 
 typeTest :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
 typeTest op (arg:_) = return $ Bool $ op arg
