@@ -27,7 +27,12 @@ primitives = [("+", numericOp (+)),
               ("&&", boolBoolMonoid (&&)),
               ("||", boolBoolMonoid (||)),
               ("number?", typeTest isNum),
-              ("string?", typeTest isString)]
+              ("string?", typeTest isString),
+              ("cons", cons),
+              ("car", car),
+              ("cdr", cdr),
+              ("eqv?", eqv)
+              ]
 
 
 eval :: LispVal -> ThrowsError LispVal
@@ -79,6 +84,46 @@ boolMonoid unpacker op args =
         arg1 <- unpacker $ args !! 1
         return . Bool $ op arg0 arg1
 
+eqv :: [LispVal] -> ThrowsError LispVal
+eqv [Number arg1, Number arg2] = return $ Bool $ arg1 == arg2
+eqv [String arg1, String arg2] = return $ Bool $ arg1 == arg2
+eqv [Bool arg1, Bool arg2] = return $ Bool $ arg1 == arg2
+eqv [Atom arg1, Atom arg2] = return $ Bool $ arg1 == arg2
+eqv [DottedList xs x, DottedList ys y] = eqv [List (xs++[x]), List (ys++[y])]
+eqv [List xs, List ys] =
+    if length xs /= length ys
+        then return $ Bool False
+        else return $ Bool $ all binEqv (zip xs ys)
+                          where binEqv (x, y) =
+                                  case eqv [x, y] of
+                                      Left err -> False
+                                      Right (Bool val) -> val
+eqv [_, _] = return $ Bool False
+eqv badArgList = throwError $ NumArgs 2 badArgList
+--
+-- List primitives
+-- | Returns the first element of a list.
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x:_)] = return x
+car [DottedList (x:_) _] = return x
+car [badArg] = throwError $ TypeMismatch "pair" badArg
+car badArgList = throwError $ NumArgs 1 badArgList
+
+-- | Returns the tail of the list.
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (_:xs)] = return $ List xs
+cdr [DottedList (_:xs) tail] = return $ DottedList xs tail
+cdr [badArg] = throwError $ TypeMismatch "pair" badArg
+cdr badArgList = throwError $ NumArgs 1 badArgList
+
+-- Constructs a list from two elements
+cons :: [LispVal] -> ThrowsError LispVal
+-- List [] is meant to represent a `Nil` in lisp
+cons [x, List []] = return $ List [x]
+cons [x, List xs] = return $ List (x:xs)
+cons [x, DottedList xs tail] = return $ DottedList (x:xs) tail
+cons [x1, x2] = return $ DottedList [x1] x2
+cons badArg = throwError $ NumArgs 2 badArg
 
 typeTest :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
 typeTest op (arg:_) = return $ Bool $ op arg
@@ -105,10 +150,10 @@ isString (String _) = True
 isString _ = False
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
--- `maybe` allows to specify what to do in case of success and failure
--- here in case `lookup` fails we return False, otherwise the lookup returns
--- a function that we want to apply to args, hence `$ args`
 apply fun args =
+    -- `maybe` allows to specify what to do in case of success and failure
+    -- here in case `lookup` fails we return False, otherwise the lookup returns
+    -- a function that we want to apply to args, hence `$ args`
     maybe
         (throwError $ NotFunction "Unrecognized primitive function args" fun)
         ($ args)
