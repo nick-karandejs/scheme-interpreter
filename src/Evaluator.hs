@@ -6,52 +6,61 @@ import Common
 import Control.Monad.Except
 
 
+primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
+primitives = [("+", numericOp (+)),
+              ("-", numericOp (-)),
+              ("*", numericOp (*)),
+              ("/", numericOp div),
+              ("mod", numericOp mod),
+              ("quotient", numericOp quot),
+              ("remainder", numericOp rem),
+              ("=", numBoolMonoid (==)),
+              ("<", numBoolMonoid (<)),
+              ("<=", numBoolMonoid (<=)),
+              (">", numBoolMonoid (>)),
+              (">=", numBoolMonoid (>=)),
+              ("string=?", strBoolMonoid (==)),
+              ("string<?", strBoolMonoid (<)),
+              ("string>?", strBoolMonoid (>)),
+              ("string<=?", strBoolMonoid (<=)),
+              ("string>=?", strBoolMonoid (>=)),
+              ("&&", boolBoolMonoid (&&)),
+              ("||", boolBoolMonoid (||)),
+              ("number?", typeTest isNum),
+              ("string?", typeTest isString)]
+
+
 eval :: LispVal -> ThrowsError LispVal
 -- using `@` we capture the passed value (LispVal) rather than String value
 eval val@(String _) = return val
+
 eval val@(Number _) = return val
+
 eval val@(Bool _) = return val
+
 eval (List [Atom "quote", val]) = return val
+
+eval (List [Atom "if", pred, conseq, alt]) = do
+    predResult <- eval pred
+    -- Anything apart from #f is considered #t
+    case predResult of
+        Bool False -> eval alt
+        Bool True -> eval conseq
+        otherwise -> throwError $ TypeMismatch "bool" predResult
+
 eval (List (Atom fun : args)) = mapM eval args >>= apply fun
+        
 eval badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
-numericMonoid :: (Integer -> Integer -> Integer)
+
+numericOp :: (Integer -> Integer -> Integer)
                  -> [LispVal] -> ThrowsError LispVal
-numericMonoid _ [] = throwError $ NumArgs 2 []
-numericMonoid _ val@[_] = throwError $ NumArgs 2 val
-numericMonoid op params = mapM unpackNum params >>= return . Number . foldl1 op
+numericOp _ [] = throwError $ NumArgs 2 []
+numericOp _ val@[_] = throwError $ NumArgs 2 val
+numericOp op params = mapM unpackNum params >>= return . Number . foldl1 op
 
-unpackNum :: LispVal -> ThrowsError Integer
-unpackNum (Number n) = return n
-unpackNum val = throwError $ TypeMismatch "number" val
-
-unpackStr :: LispVal -> ThrowsError String
-unpackStr (String s) = return s
-unpackStr val = throwError $ TypeMismatch "string" val
-
-unpackBool :: LispVal -> ThrowsError Bool
-unpackBool (Bool b) = return b
-unpackBool val = throwError $ TypeMismatch "boolean" val
-
--- TODO: add weak typing? i.e. to accept string as number as well
-
--- TODO: add more primitives
-primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
-primitives = [("+", numericMonoid (+)),
-              ("-", numericMonoid (-)),
-              ("*", numericMonoid (*)),
-              ("/", numericMonoid div),
-              ("mod", numericMonoid mod),
-              ("quotient", numericMonoid quot),
-              ("remainder", numericMonoid rem),
-              ("number?", typeTest isNum),
-              ("string?", typeTest isString),
-              ("=", numBoolMonoid (==)),
-              ("string=?", strBoolMonoid (==)),
-              ("&&", boolBoolMonoid (&&))]
-
-
-numBoolMonoid :: (Integer -> Integer -> Bool) -> [LispVal] -> ThrowsError LispVal
+numBoolMonoid :: (Integer -> Integer -> Bool) -> [LispVal]
+                  -> ThrowsError LispVal
 numBoolMonoid = boolMonoid unpackNum
 
 strBoolMonoid :: (String -> String -> Bool) -> [LispVal] -> ThrowsError LispVal
@@ -69,12 +78,23 @@ boolMonoid unpacker op args =
         arg0 <- unpacker $ args !! 0
         arg1 <- unpacker $ args !! 1
         return . Bool $ op arg0 arg1
-{- numBoolMonoid op [arg1, arg2] = return $ Bool $ op (unpackNum arg1) (unpackNum arg2) -}
 
 
 typeTest :: (LispVal -> Bool) -> [LispVal] -> ThrowsError LispVal
 typeTest op (arg:_) = return $ Bool $ op arg
 typeTest op [] = throwError $ NumArgs 1 []
+
+unpackNum :: LispVal -> ThrowsError Integer
+unpackNum (Number n) = return n
+unpackNum val = throwError $ TypeMismatch "number" val
+
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String s) = return s
+unpackStr val = throwError $ TypeMismatch "string" val
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool val = throwError $ TypeMismatch "boolean" val
 
 isNum :: LispVal -> Bool
 isNum (Number _) = True
