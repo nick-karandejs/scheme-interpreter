@@ -4,6 +4,7 @@ module Evaluator (
 
 import Common
 import Control.Monad.Except
+import Data.List
 
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
@@ -53,10 +54,29 @@ eval (List [Atom "if", pred, conseq, alt]) = do
         Bool True -> eval conseq
         otherwise -> throwError $ TypeMismatch "bool" predResult
 
+eval (List ((Atom "cond") : clauses)) = do
+    -- evalClauses should end up being either a LispError or a list of lvalues
+    -- does `<-` act as Products morphism?
+    evalClauses <- mapM evalClauseTest clauses
+    case evalClauses of
+        (x:xs) -> do
+            let pairs = zip evalClauses clauses
+                getBool (Bool v, _) = v
+                resultPair = find getBool pairs
+            case resultPair of
+                Just (_, expr) -> evalClauseExpr expr
+                Nothing -> throwError $ RuntimeError "No test was true in" (List clauses) 
+        otherwise -> throwError $ TypeMismatch "bool" (Bool False)
+
 eval (List (Atom fun : args)) = mapM eval args >>= apply fun
         
 eval badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
+-- Working on clauses with exactly one expression
+evalClauseTest :: LispVal -> ThrowsError LispVal
+evalClauseTest (List [test, _]) = eval test 
+evalClauseExpr :: LispVal -> ThrowsError LispVal
+evalClauseExpr (List [_, expr]) = eval expr 
 
 numericOp :: (Integer -> Integer -> Integer)
                  -> [LispVal] -> ThrowsError LispVal

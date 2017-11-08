@@ -35,6 +35,7 @@ data LispError = NumArgs Integer [LispVal]
                | BadSpecialForm String LispVal
                | NotFunction String String
                | UnboundVar String String
+               | RuntimeError String LispVal
                | Default String
 
 instance Show LispError where
@@ -47,6 +48,7 @@ instance Show LispError where
     show (BadSpecialForm message form) = unwords [message, ":", show form]
     show (NotFunction message fun) = unwords [message, ":", show fun]
     show (UnboundVar message varname) = unwords [message, ":", varname]
+    show (RuntimeError message val) = unwords [message, ":", show val]
 
 
 type ThrowsError = Either LispError
