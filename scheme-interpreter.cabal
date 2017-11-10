@@ -18,6 +18,7 @@ library
   exposed-modules:     Parser
                      , Evaluator
                      , Common
+                     , REPL
   build-depends:       base >= 4.7 && < 5
                      , parsec
                      , mtl >= 2.2.1
