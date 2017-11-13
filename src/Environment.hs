@@ -1,5 +1,12 @@
 module Environment (
-    
+    Env
+  , IOThrowsError
+  , nullEnv
+  , setVar
+  , getVar
+  , defineVar
+  , runIOThrows
+  , liftThrows
 )
 where
 
@@ -46,9 +53,37 @@ getVar envRef var = do
 -- | Updates a variable and returns the new value
 setVar :: Env -> String -> LispVal -> IOThrowsError LispVal
 setVar envRef var value = do
-    env <- liftIO . readIORef envRef
+    env <- liftIO $ readIORef envRef
     maybe
-        (throwError $ UnboundVar "Setting an unbound variable" var))
+        (throwError $ UnboundVar "Setting an unbound variable" var)
         (liftIO . (flip writeIORef value))
         (lookup var env)
     return value
+
+defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
+defineVar envRef var value = do
+    isDefined <- liftIO $ isBound envRef var
+    if isDefined
+        then setVar envRef var value
+        else liftIO $ do
+            valueRef <- newIORef value
+            env <- readIORef envRef
+            writeIORef envRef ((var, valueRef) : env)
+            return value
+
+bindVars :: Env -> [(String, LispVal)] -> IO Env
+{- bindVars envRef bindings = do -}
+{-     let transform (var, val) = do -}
+{-             ref <- newIORef val -}
+{-             return (var, ref) -}
+{-     newEnv <- mapM transform bindings -}
+{-     env <- readIORef envRef -}
+{-     writeIORef envRef (newEnv ++ env) -}
+{-     return envRef -}
+-- Much more elegant version
+bindVars envRef bindings =
+    readIORef envRef >>= extendEnv bindings >>= newIORef
+    where extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
+          addBinding (var, val) = do
+            ref <- newIORef val
+            return (var, ref)
