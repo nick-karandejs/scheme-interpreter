@@ -5,7 +5,7 @@ module Evaluator (
 import Common
 import Control.Monad.Except
 import Data.List
-
+import Environment
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericOp (+)),
@@ -36,47 +36,55 @@ primitives = [("+", numericOp (+)),
               ]
 
 
-eval :: LispVal -> ThrowsError LispVal
+eval :: Env -> LispVal -> IOThrowsError LispVal
 -- using `@` we capture the passed value (LispVal) rather than String value
-eval val@(String _) = return val
+eval env val@(String _) = return val
 
-eval val@(Number _) = return val
+eval env val@(Number _) = return val
 
-eval val@(Bool _) = return val
+eval env val@(Bool _) = return val
 
-eval (List [Atom "quote", val]) = return val
+eval env (Atom id) = getVar env id
 
-eval (List [Atom "if", pred, conseq, alt]) = do
-    predResult <- eval pred
+eval env (List [Atom "quote", val]) = return val
+
+eval env (List [Atom "if", pred, conseq, alt]) = do
+    predResult <- eval env pred
     -- Anything apart from #f is considered #t
     case predResult of
-        Bool False -> eval alt
-        Bool True -> eval conseq
+        Bool False -> eval env alt
+        Bool True -> eval env conseq
         otherwise -> throwError $ TypeMismatch "bool" predResult
 
-eval (List ((Atom "cond") : clauses)) = do
+eval env (List [Atom "set!", Atom var, form]) =
+    eval env form >>= setVar env var
+
+eval env (List [Atom "define", Atom var, form]) =
+    eval env form >>= defineVar env var
+
+eval env (List ((Atom "cond") : clauses)) = do
     -- evalClauses should end up being either a LispError or a list of lvalues
     -- does `<-` act as Products morphism?
-    evalClauses <- mapM evalClauseTest clauses
+    evalClauses <- mapM (evalClauseTest env) clauses
     case evalClauses of
         (x:xs) -> do
             let pairs = zip evalClauses clauses
                 getBool (Bool v, _) = v
                 resultPair = find getBool pairs
             case resultPair of
-                Just (_, expr) -> evalClauseExpr expr
-                Nothing -> throwError $ RuntimeError "No test was true in" (List clauses) 
+                Just (_, expr) -> evalClauseExpr env expr
+                Nothing -> throwError $ RuntimeError "No test was true in" (List clauses)
         otherwise -> throwError $ TypeMismatch "bool" (Bool False)
 
-eval (List (Atom fun : args)) = mapM eval args >>= apply fun
+eval env (List (Atom fun : args)) = mapM (eval env) args >>= liftThrows . apply fun
         
-eval badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
+eval env badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
 -- Working on clauses with exactly one expression
-evalClauseTest :: LispVal -> ThrowsError LispVal
-evalClauseTest (List [test, _]) = eval test 
-evalClauseExpr :: LispVal -> ThrowsError LispVal
-evalClauseExpr (List [_, expr]) = eval expr 
+evalClauseTest :: Env -> LispVal -> IOThrowsError LispVal
+evalClauseTest env (List [test, _]) = eval env test 
+evalClauseExpr :: Env -> LispVal -> IOThrowsError LispVal
+evalClauseExpr env (List [_, expr]) = eval env expr 
 
 numericOp :: (Integer -> Integer -> Integer)
                  -> [LispVal] -> ThrowsError LispVal
