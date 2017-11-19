@@ -2,12 +2,15 @@ module Common (
     LispVal(..)
   , ThrowsError(..)
   , LispError(..)
+  , Env
+  , IOThrowsError
   , extractValue
   , trapError
 ) where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad.Except
+import Data.IORef
 
 data LispVal = Atom String
              | List [LispVal]
@@ -15,6 +18,10 @@ data LispVal = Atom String
              | Number Integer
              | String String
              | Bool Bool
+             | PrimitiveFun ([LispVal] -> ThrowsError LispVal)
+             -- closure is the environment the function was created in
+             | Fun {params :: [String], vararg :: (Maybe String),
+                    body :: [LispVal], closure :: Env}
 
 
 instance Show LispVal where
@@ -26,6 +33,13 @@ instance Show LispVal where
     show (List contents) = "(" ++ (unwords . map show) contents ++ ")"
     show (DottedList head tail) =
         "(" ++ (unwords . map show) head ++ " . " ++ show tail ++ ")"
+    show (PrimitiveFun _) = "<primitive>"
+    show (Fun {params=args, vararg=varargs, body=body, closure=env}) =
+        let textArgs = map show args
+            varargsStr = case varargs of
+                Nothing -> ""
+                Just s -> " . " ++ s
+        in "(lambda (" ++ unwords textArgs ++ varargsStr ++ ") ...)"
 
 
 
@@ -53,7 +67,27 @@ instance Show LispError where
 
 type ThrowsError = Either LispError
 
+-- IORef specifies a mutable variable inside the IO monad
+type Env = IORef [(String, IORef LispVal)]
+
+-- Monad containing IO actions that may throw an error
+-- We specify exception type to be LispError and the inner monad is IO
+type IOThrowsError = ExceptT LispError IO
+
+-- This should give text info defined for LispErrors
+-- Instead of throwing exception by system, handle it ourselves
 trapError action = catchError action (return . show)
 extractValue :: ThrowsError a -> a
--- Not defining Left on purpose
+-- Not defining Left on purpose, since only using this after catchError
 extractValue (Right val) = val
+
+
+makeFun :: Maybe String -> Env -> [String] -> [LispVal] -> IOThrowsError LispVal
+makeFun varargs env params body =
+    return $ Fun (map show params) varargs body env
+
+makeNormalFun :: Env -> [String] -> [LispVal] -> IOThrowsError LispVal
+makeNormalFun = makeFun Nothing
+
+makeVarArgFun :: String -> Env -> [String] -> [LispVal] -> IOThrowsError LispVal
+makeVarArgFun = makeFun . Just . show

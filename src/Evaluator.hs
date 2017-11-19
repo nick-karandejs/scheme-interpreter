@@ -1,5 +1,6 @@
 module Evaluator (
     eval
+  , primitiveBindings
 ) where
 
 import Common
@@ -36,6 +37,11 @@ primitives = [("+", numericOp (+)),
               ]
 
 
+primitiveBindings :: IO Env
+primitiveBindings =
+    nullEnv >>= (flip bindVars) (map makePrimitive primitives)
+    where makePrimitive (name, fun) = (name, PrimitiveFun fun)
+
 eval :: Env -> LispVal -> IOThrowsError LispVal
 -- using `@` we capture the passed value (LispVal) rather than String value
 eval env val@(String _) = return val
@@ -64,7 +70,6 @@ eval env (List [Atom "define", Atom var, form]) =
 
 eval env (List ((Atom "cond") : clauses)) = do
     -- evalClauses should end up being either a LispError or a list of lvalues
-    -- does `<-` act as Products morphism?
     evalClauses <- mapM (evalClauseTest env) clauses
     case evalClauses of
         (x:xs) -> do
@@ -76,7 +81,11 @@ eval env (List ((Atom "cond") : clauses)) = do
                 Nothing -> throwError $ RuntimeError "No test was true in" (List clauses)
         otherwise -> throwError $ TypeMismatch "bool" (Bool False)
 
-eval env (List (Atom fun : args)) = mapM (eval env) args >>= liftThrows . apply fun
+eval env (List (function : args)) = do
+    fun <- eval env function
+    argValues <- mapM (eval env) args
+    liftThrows $ apply fun argValues
+
         
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
 
@@ -177,13 +186,5 @@ isString :: LispVal -> Bool
 isString (String _) = True
 isString _ = False
 
-apply :: String -> [LispVal] -> ThrowsError LispVal
-apply fun args =
-    -- `maybe` allows to specify what to do in case of success and failure
-    -- here in case `lookup` fails we return False, otherwise the lookup returns
-    -- a function that we want to apply to args, hence `$ args`
-    maybe
-        (throwError $ NotFunction "Unrecognized primitive function args" fun)
-        ($ args)
-        (lookup fun primitives)
-
+apply :: LispVal -> [LispVal] -> ThrowsError LispVal
+apply (PrimitiveFun fun) args = fun args

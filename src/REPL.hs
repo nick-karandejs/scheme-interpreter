@@ -8,7 +8,7 @@ where
 import System.IO
 import Control.Monad
 import Parser (readExpr)
-import Evaluator (eval)
+import Evaluator (eval, primitiveBindings)
 import Common
 import Environment
 
@@ -20,7 +20,8 @@ readPrompt :: String -> IO String
 readPrompt prompt = flushStr prompt >> getLine
 
 evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
+evalString env expr =
+    runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
 
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr = evalString env expr >>= putStrLn
@@ -37,4 +38,6 @@ runOne :: String -> IO ()
 runOne expr = nullEnv >>= flip evalAndPrint expr
 
 runRepl :: IO ()
-runRepl = nullEnv >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint
+runRepl =
+    primitiveBindings
+    >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint

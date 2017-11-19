@@ -1,10 +1,9 @@
 module Environment (
-    Env
-  , IOThrowsError
-  , nullEnv
+    nullEnv
   , setVar
   , getVar
   , defineVar
+  , bindVars
   , runIOThrows
   , liftThrows
 )
@@ -15,13 +14,6 @@ import Data.IORef
 import Control.Monad.Except
 import Control.Monad
 import Common
-
--- IORef specifies a mutable variable inside the IO monad
-type Env = IORef [(String, IORef LispVal)]
-
--- Monad containing IO actions that may throw an error
--- We specify exception type to be LispError and the inner monad is IO
-type IOThrowsError = ExceptT LispError IO
 
 nullEnv :: IO Env
 nullEnv = newIORef []
