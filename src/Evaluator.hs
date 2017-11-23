@@ -81,13 +81,39 @@ eval env (List ((Atom "cond") : clauses)) = do
                 Nothing -> throwError $ RuntimeError "No test was true in" (List clauses)
         otherwise -> throwError $ TypeMismatch "bool" (Bool False)
 
+eval env (List (Atom "define" : List (Atom var : params) : body)) =
+    makeNormalFun env params body >>= defineVar env var
+
+eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) =
+    makeVarArgFun varargs env params body >>= defineVar env var
+
+eval env (List (Atom "lambda" : List params : body)) =
+    makeNormalFun env params body
+
+eval env (List (Atom "lambda" : DottedList params varargs : body)) =
+    makeVarArgFun varargs env params body
+
+eval env (List (Atom "lambda" : varargs@(Atom _) : body)) =
+    makeVarArgFun varargs env [] body
+
 eval env (List (function : args)) = do
     fun <- eval env function
     argValues <- mapM (eval env) args
-    liftThrows $ apply fun argValues
+    apply fun argValues
 
-        
 eval env badForm = throwError $ BadSpecialForm "Unrecognized special form " badForm
+
+
+makeFun :: Maybe String -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
+makeFun varargs env params body =
+    return $ Fun (map show params) varargs body env
+
+makeNormalFun :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
+makeNormalFun = makeFun Nothing
+
+makeVarArgFun :: LispVal -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
+makeVarArgFun = makeFun . Just . show
+
 
 -- Working on clauses with exactly one expression
 evalClauseTest :: Env -> LispVal -> IOThrowsError LispVal
@@ -186,5 +212,18 @@ isString :: LispVal -> Bool
 isString (String _) = True
 isString _ = False
 
-apply :: LispVal -> [LispVal] -> ThrowsError LispVal
-apply (PrimitiveFun fun) args = fun args
+apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
+apply (PrimitiveFun fun) args = liftThrows $ fun args
+apply (Fun params varargs body closure) args =
+    if length params /= length args && varargs == Nothing then
+        throwError $ NumArgs (length params) args
+    else
+        let remainingArgs = drop (length params) args
+            bindVarArgs arg env = case arg of
+                Just argName -> liftIO $ bindVars env [(argName, List remainingArgs)]
+                Nothing -> return env
+
+            evalBody env = liftM last $ mapM (eval env) body
+        in (liftIO $ bindVars closure (zip params args))
+            >>= bindVarArgs varargs
+            >>= evalBody

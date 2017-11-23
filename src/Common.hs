@@ -43,7 +43,7 @@ instance Show LispVal where
 
 
 
-data LispError = NumArgs Integer [LispVal]
+data LispError = NumArgs Int [LispVal]
                | TypeMismatch String LispVal
                | Parser ParseError
                | BadSpecialForm String LispVal
@@ -80,14 +80,3 @@ trapError action = catchError action (return . show)
 extractValue :: ThrowsError a -> a
 -- Not defining Left on purpose, since only using this after catchError
 extractValue (Right val) = val
-
-
-makeFun :: Maybe String -> Env -> [String] -> [LispVal] -> IOThrowsError LispVal
-makeFun varargs env params body =
-    return $ Fun (map show params) varargs body env
-
-makeNormalFun :: Env -> [String] -> [LispVal] -> IOThrowsError LispVal
-makeNormalFun = makeFun Nothing
-
-makeVarArgFun :: String -> Env -> [String] -> [LispVal] -> IOThrowsError LispVal
-makeVarArgFun = makeFun . Just . show
