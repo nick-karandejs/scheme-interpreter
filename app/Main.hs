@@ -11,7 +11,5 @@ import Control.Monad
 main :: IO ()
 main = do
     args <- getArgs
-    case length args of
-        0 -> runRepl
-        1 -> runOne $ head args
+    if null args then runRepl else runOne args
 

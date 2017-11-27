@@ -34,8 +34,13 @@ until_ pred prompt action = do
         then return ()
         else action input >> until_ pred prompt action
 
-runOne :: String -> IO ()
-runOne expr = nullEnv >>= flip evalAndPrint expr
+-- Filename and arguments to evaluate with
+runOne :: [String] -> IO ()
+runOne args = do
+-- nullEnv >>= flip evalAndPrint expr
+    env <- primitiveBindings >>= flip bindVars [("args", List $ map String $ drop 1 args)]
+    runIOThrows $ liftM show $ eval env (List [Atom "load", String $ args!!0])
+    >>= hPutStrLn stderr
 
 runRepl :: IO ()
 runRepl =

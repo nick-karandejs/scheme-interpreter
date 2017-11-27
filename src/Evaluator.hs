@@ -1,6 +1,7 @@
 module Evaluator (
     eval
   , primitiveBindings
+  , apply
 ) where
 
 import Common
@@ -227,3 +228,5 @@ apply (Fun params varargs body closure) args =
         in (liftIO $ bindVars closure (zip params args))
             >>= bindVarArgs varargs
             >>= evalBody
+
+apply (IOFun fun) args = fun args

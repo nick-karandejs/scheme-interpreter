@@ -11,6 +11,7 @@ module Common (
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad.Except
 import Data.IORef
+import System.IO (Handle)
 
 data LispVal = Atom String
              | List [LispVal]
@@ -22,6 +23,8 @@ data LispVal = Atom String
              -- closure is the environment the function was created in
              | Fun {params :: [String], vararg :: (Maybe String),
                     body :: [LispVal], closure :: Env}
+             | IOFun ([LispVal] -> IOThrowsError LispVal)
+             | Port Handle
 
 
 instance Show LispVal where
@@ -40,6 +43,8 @@ instance Show LispVal where
                 Nothing -> ""
                 Just s -> " . " ++ s
         in "(lambda (" ++ unwords textArgs ++ varargsStr ++ ") ...)"
+    show (Port _) = "<IO Port>"
+    show (IOFun _) = "<IO primitive>"
 
 
 

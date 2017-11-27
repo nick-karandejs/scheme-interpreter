@@ -1,6 +1,7 @@
 module Parser
     (parseExpr
    , readExpr
+   , readExprList
     ) where
 
 import Control.Monad
@@ -67,6 +68,7 @@ parseQuoted = do
     return $ List [Atom "quote", x]
 
 
+-- | Parser for a Lisp expression
 parseExpr :: ParserVal
 parseExpr =
     parseAtom
@@ -79,8 +81,15 @@ parseExpr =
            char ')'
            return x
 
-readExpr :: String -> ThrowsError LispVal
-readExpr input =
-    case parse parseExpr "lisp" input of
+-- | Returns a Lisp value from input string
+readOrThrow :: Parser a -> String -> ThrowsError a
+readOrThrow parser input =
+    case parse parser "lisp" input of
         Left err -> throwError $ Parser err
         Right val -> return val
+
+readExpr :: String -> ThrowsError LispVal
+readExpr = readOrThrow parseExpr
+
+readExprList :: String -> ThrowsError [LispVal]
+readExprList = readOrThrow (endBy parseExpr spaces)
