@@ -7,9 +7,9 @@ import Control.Monad.Except
 import System.IO
 import Common 
 import qualified Text.ParserCombinators.Parsec as Parsec
-import Parser
+import Parser (readExpr)
 import Environment (liftThrows)
-import Evaluator (apply)
+import Evaluator (apply, load)
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
 ioPrimitives = [("apply", applyProc),
@@ -42,6 +42,3 @@ readContents [String filename] = liftM String $ liftIO $ readFile filename
 
 readAll :: [LispVal] -> IOThrowsError LispVal
 readAll [String filename] = liftM List $ load filename
-
-load :: String -> IOThrowsError [LispVal]
-load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList

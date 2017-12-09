@@ -2,12 +2,14 @@ module Evaluator (
     eval
   , primitiveBindings
   , apply
+  , load
 ) where
 
 import Common
 import Control.Monad.Except
 import Data.List
 import Environment
+import Parser (readExprList)
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericOp (+)),
@@ -96,6 +98,9 @@ eval env (List (Atom "lambda" : DottedList params varargs : body)) =
 
 eval env (List (Atom "lambda" : varargs@(Atom _) : body)) =
     makeVarArgFun varargs env [] body
+
+eval env (List [Atom "load", String filename]) =
+    load filename >>= liftM last . mapM (eval env)
 
 eval env (List (function : args)) = do
     fun <- eval env function
@@ -230,3 +235,6 @@ apply (Fun params varargs body closure) args =
             >>= evalBody
 
 apply (IOFun fun) args = fun args
+
+load :: String -> IOThrowsError [LispVal]
+load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList

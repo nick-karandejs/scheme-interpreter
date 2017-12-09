@@ -13,6 +13,9 @@ import Common
 import Environment
 
 
+stdlibPath = "src/stdlib.scm"
+
+
 flushStr :: String -> IO ()
 flushStr s = putStr s >> hFlush stdout
 
@@ -43,6 +46,8 @@ runOne args = do
     >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl =
-    primitiveBindings
-    >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint
+runRepl = do
+    env <- primitiveBindings
+    result <- runIOThrows $ liftM show $ eval env (List [Atom "load", String stdlibPath])
+    hPutStrLn stderr result
+    return env >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint
