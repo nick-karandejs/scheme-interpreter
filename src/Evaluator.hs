@@ -5,11 +5,16 @@ module Evaluator (
   , load
 ) where
 
-import Common
 import Control.Monad.Except
 import Data.List
+import System.IO
+
+import qualified Text.ParserCombinators.Parsec as Parsec
+
+import Common
 import Environment
-import Parser (readExprList)
+import Parser (readExpr, readExprList)
+
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericOp (+)),
@@ -39,11 +44,25 @@ primitives = [("+", numericOp (+)),
               ("eqv?", eqv)
               ]
 
+ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
+ioPrimitives = [("apply", applyProc),
+                ("open-input-file", makePort ReadMode),
+                ("open-output-file", makePort WriteMode),
+                ("close-input-port", closePort),
+                ("close-output-port", closePort),
+                ("read", readProc),
+                ("write", writeProc),
+                ("read-contents", readContents),
+                ("read-all", readAll)
+               ]
 
 primitiveBindings :: IO Env
 primitiveBindings =
-    nullEnv >>= (flip bindVars) (map makePrimitive primitives)
-    where makePrimitive (name, fun) = (name, PrimitiveFun fun)
+    {- nullEnv >>= (flip bindVars) (map makePrimitive primitiveFun primitives) -}
+    nullEnv >>= (flip bindVars) varList
+    where makePrimitive constructor (name, fun) = (name, constructor fun)
+          varList = map (makePrimitive PrimitiveFun) primitives ++
+                    map (makePrimitive IOFun) ioPrimitives
 
 eval :: Env -> LispVal -> IOThrowsError LispVal
 -- using `@` we capture the passed value (LispVal) rather than String value
@@ -238,3 +257,23 @@ apply (IOFun fun) args = fun args
 
 load :: String -> IOThrowsError [LispVal]
 load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
+
+applyProc [fun, List args] = apply fun args
+applyProc (fun : args) = apply fun args
+
+makePort mode [String filename] = liftM Port $ liftIO $ openFile filename mode
+
+closePort [Port port] = liftIO $ hClose port >> (return $ Bool True)
+closePort _ = return $ Bool False
+
+readProc [] = readProc [Port stdin]
+readProc [Port port] = (liftIO $ hGetLine port) >>= liftThrows . readExpr
+
+writeProc [obj] = writeProc [obj, Port stdout]
+writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
+
+readContents :: [LispVal] -> IOThrowsError LispVal
+readContents [String filename] = liftM String $ liftIO $ readFile filename
+
+readAll :: [LispVal] -> IOThrowsError LispVal
+readAll [String filename] = liftM List $ load filename

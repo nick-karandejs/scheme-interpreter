@@ -20,7 +20,6 @@ library
                      , Common
                      , REPL
                      , Environment
-                     , IOEvaluator
   build-depends:       base >= 4.7 && < 5
                      , parsec
                      , mtl >= 2.2.1
