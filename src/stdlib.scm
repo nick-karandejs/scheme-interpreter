@@ -47,3 +47,14 @@
 (define (copy lst) (foldr cons '() lst))
 
 (define (reverse lst) (fold (flip cons) '() lst))
+
+(define (mem-helper pred op)
+  (lambda (acc next) (if (and (not acc) (pred (op next))) next acc)))
+
+(define (member obj lst) (fold (mem-helper (curry eqv? obj) id) #f lst))
+(define (assoc obj alist) (fold (mem-helper (curry eqv? obj) car) #f lst))
+
+(define (map fun lst) (foldr (lambda (x acc) (cons (fun x) acc)) '() lst))
+
+(define (filter pred lst)
+  (foldr (lambda (x acc) (if (pred x) (cons x acc) acc)) '() lst))
