@@ -41,7 +41,8 @@ primitives = [("+", numericOp (+)),
               ("cons", cons),
               ("car", car),
               ("cdr", cdr),
-              ("eqv?", eqv)
+              ("eqv?", eqv),
+              ("equal?", eqv)
               ]
 
 ioPrimitives :: [(String, [LispVal] -> IOThrowsError LispVal)]
@@ -81,8 +82,7 @@ eval env (List [Atom "if", pred, conseq, alt]) = do
     -- Anything apart from #f is considered #t
     case predResult of
         Bool False -> eval env alt
-        Bool True -> eval env conseq
-        otherwise -> throwError $ TypeMismatch "bool" predResult
+        otherwise -> eval env conseq
 
 eval env (List [Atom "set!", Atom var, form]) =
     eval env form >>= setVar env var
