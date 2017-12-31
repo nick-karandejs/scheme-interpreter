@@ -26,6 +26,15 @@ data LispVal = Atom String
              | IOFun ([LispVal] -> IOThrowsError LispVal)
              | Port Handle
 
+instance Eq LispVal where
+    (==) (String x) (String y) = x == y
+    (==) (Atom x) (Atom y) = x == y
+    (==) (List xs) (List ys) = all id $ zipWith (==) xs ys
+    (==) (Number x) (Number y) = x == y
+    (==) (Bool x) (Bool y) = x == y
+    (==) (DottedList xs x) (DottedList ys y) = x == y && xs == ys
+    (==) _ _ = False
+
 
 instance Show LispVal where
     show (String contents) = "\"" ++ contents ++ "\""
@@ -69,6 +78,9 @@ instance Show LispError where
     show (UnboundVar message varname) = unwords [message, ":", varname]
     show (RuntimeError message val) = unwords [message, ":", show val]
 
+instance Eq LispError where
+    (==) (Default a) (Default b) = a == b
+    (==) (Parser a) (Parser b) = a == b
 
 type ThrowsError = Either LispError
 
